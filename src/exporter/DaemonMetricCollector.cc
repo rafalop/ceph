@@ -1,6 +1,8 @@
 #include "DaemonMetricCollector.h"
 #include "common/admin_socket_client.h"
 #include "common/perf_counters.h"
+#include "global/global_init.h"
+#include "global/global_context.h"
 #include "include/common_fwd.h"
 
 #include <boost/json/src.hpp>
@@ -14,24 +16,21 @@ using json_object = boost::json::object;
 using json_value = boost::json::value;
 using json_array = boost::json::array;
 
-const char *DaemonMetricCollector::SOCKETDIR = "/var/run/ceph/";
-
 void DaemonMetricCollector::request_loop(boost::asio::steady_timer &timer) {
   timer.async_wait([&](const boost::system::error_code &e) {
     std::cerr << e << std::endl;
     update_sockets();
     dump_asok_metrics();
+    auto stats_period = g_conf().get_val<int64_t>("exporter_stats_period");
     timer.expires_from_now(std::chrono::seconds(stats_period));
     request_loop(timer);
   });
 }
 
 void DaemonMetricCollector::main() {
-  // TODO: let's do 5 for now and expose this to change in the future
-  stats_period = 5;
+  // time to wait before sending requests again
+  auto stats_period = g_conf().get_val<int64_t>("exporter_stats_period");
   boost::asio::io_service io;
-  // boost::asio::deadline_timer timer(io,
-  //                                   boost::posix_time::seconds(stats_period));
   boost::asio::steady_timer timer{io, std::chrono::seconds(stats_period)};
   request_loop(timer);
   io.run();
@@ -91,8 +90,9 @@ void DaemonMetricCollector::dump_asok_metrics() {
       for (auto &perf_counter : perf_group_object) {
         std::string perf_name = perf_counter.key().to_string();
         json_object perf_info = perf_counter.value().as_object();
+        auto prio_limit = g_conf().get_val<int64_t>("exporter_prio_limit");
         if (perf_info["priority"].as_int64() <
-            PerfCountersBuilder::PRIO_USEFUL) {
+            prio_limit) {
           continue;
         }
         std::string name = "ceph_" + perf_group + "_" + perf_name;
@@ -184,9 +184,10 @@ void DaemonMetricCollector::dump_asok_metric(std::stringstream &ss,
   }
 }
 void DaemonMetricCollector::update_sockets() {
+  std::string sock_dir = g_conf().get_val<std::string>("exporter_sock_dir");
   clients.clear();
   for (const auto &entry :
-       std::filesystem::directory_iterator(SOCKETDIR)) {
+       std::filesystem::directory_iterator(sock_dir)) {
     if (entry.path().extension() == ".asok") {
       std::string daemon_socket_name = entry.path().filename().string();
       std::string daemon_name =

@@ -16,13 +16,11 @@ class DaemonMetricCollector {
 public:
   void main();
   std::string get_metrics();
-  static const char *SOCKETDIR;
 
 private:
   std::map<std::string, AdminSocketClient> clients;
   std::string metrics;
   std::mutex metrics_mutex;
-  int stats_period;     // time to wait before sending requests again
   void update_sockets();
   void request_loop(boost::asio::steady_timer &timer);
 
