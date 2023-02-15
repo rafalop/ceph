@@ -31,7 +31,7 @@ endif(LINUX)
 
 if(WIN32)
   list(APPEND msg_srcs
-    async/EventPoll.cc)
+    async/EventIocp.cc)
 endif(WIN32)
 
 if(HAVE_RDMA)

@@ -31,7 +31,7 @@
 #endif
 
 #ifdef _WIN32
-#define HAVE_POLL 1
+#define HAVE_IOCP 1
 #endif
 
 #ifdef __sun
